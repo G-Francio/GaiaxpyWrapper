@@ -13,10 +13,6 @@ from tqdm.auto import tqdm
 # Needed for Marz Conversion
 
 
-def getObservationData(name):
-    return [name, "0", "0", "-", "-", "-", "-", "-"]
-
-
 def generateComment(DBData):
     """
     Generates the comment string in the Fibres Extension.
@@ -39,27 +35,10 @@ def isNumber(s):
         return False
 
 
-def generateFibresData(data):
-    name, t, ra, dec, comm = [], [], [], [], []
-    t = ["P"]
-
-    z_name = float(data[4]) if isNumber(data[4]) else -1
-    name.append(str(data[0]) + " - " + str(round(z_name, 2)))
-    ra.append(str(float(data[1]) * np.pi / 180))
-    dec.append(str(float(data[2]) * np.pi / 180))
-    comm.append(generateComment(data))
-
-    nameCol = fits.Column(name="NAME", format="80A", array=name)
-    typeCol = fits.Column(name="TYPE", format="1A", array=t)
-    raCol = fits.Column(name="RA", format="1D", array=ra)
-    decCol = fits.Column(name="DEC", format="1D", array=dec)
-    commCol = fits.Column(name="COMMENT", format="80A", array=comm)
-
-    outCols = fits.ColDefs([nameCol, typeCol, raCol, decCol, commCol])
-    return fits.BinTableHDU().from_columns(outCols, name="fibres")
-
-
 def writeFits(flux, error, wave, fibre=None, name="MarzConverterOutput.fits"):
+    """
+    Writes the process fits file, ready for Marz. Asks for overwrite permission!
+    """
     primaryHDU = fits.PrimaryHDU(flux)
     varianceHDU = fits.ImageHDU(error, name="variance")
     waveHDU = fits.ImageHDU(wave, name="wavelength")
@@ -79,6 +58,67 @@ def writeFits(flux, error, wave, fibre=None, name="MarzConverterOutput.fits"):
             hduListOut.close()
         else:
             hduListOut.close()
+
+
+def _getObservationData(name):
+    return [name, "0", "0", "-", "-", "-", "-", "-"]
+
+
+def getObservationData(nameList):
+    """
+    Generates mock data if everything fails.
+    """
+    observationDataFallback = []
+    if not isinstance(nameList, list):
+        nameList = [nameList]
+
+    for name in nameList:
+        mockData = _getObservationData(name)
+        observationDataFallback.append(mockData)
+    return np.array(observationDataFallback)
+
+
+def generateFibresData(data):
+    """
+    Given data from QDB, produces fibre data.
+    If no data are found on the DB (or the DB can't be accessed) neutral, mock
+    data are generated on the fly (e.g. ra/dec = 0/0, `z_spec = -`)
+    """
+    name, t, ra, dec, comm = [], [], [], [], []
+    t = ["P"] * len(data)
+
+    for data in data:
+        z_name = float(data[4]) if isNumber(data[4]) else -1
+        name.append(str(data[0]) + " - " + str(round(z_name, 2)))
+        ra.append(str(float(data[1]) * np.pi / 180))
+        dec.append(str(float(data[2]) * np.pi / 180))
+        comm.append(generateComment(data))
+
+    nameCol = fits.Column(name="NAME", format="80A", array=name)
+    typeCol = fits.Column(name="TYPE", format="1A", array=t)
+    raCol = fits.Column(name="RA", format="1D", array=ra)
+    decCol = fits.Column(name="DEC", format="1D", array=dec)
+    commCol = fits.Column(name="COMMENT", format="80A", array=comm)
+
+    outCols = fits.ColDefs([nameCol, typeCol, raCol, decCol, commCol])
+    return fits.BinTableHDU().from_columns(outCols, name="fibres")
+
+
+def writeAll(specList, outpath, outfile):
+    waveList = []
+    fluxList = []
+    errList  = []
+    nameList = []
+
+    for s in specList:
+        nameList.append(str(s.qid) if s.qid is not None else '')
+        waveList.append(list(s.wave.value.reshape(1, -1)[0] * 10))
+        fluxList.append(list(s.flux.value.reshape(1, -1)[0]))
+        errList.append(list(s.err.value.reshape(1, -1)[0]))
+
+    specDBData = getObservationData(nameList)
+    fibreHDU = generateFibresData(specDBData)
+    writeFits(fluxList, errList, waveList, fibre = fibreHDU, name = outpath + outfile)
 
 
 # ---------------------------------------------------------------------- #
@@ -159,6 +199,7 @@ class spec:
     def get_meta(self):
         return {
             'qid': self.qid,
+            'gid': self.gid,
             'ra': self.ra,
             'dec': self.dec,
             'z': self.z,
