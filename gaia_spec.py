@@ -295,11 +295,11 @@ def load_spectra(path, wmin=330, wmax=1050, step=1440, space=np.linspace):
     return spec_list
 
 
-def load_single_spec(path, wmin=330, wmax=1050, step=1440, space=np.linspace):
+def load_single_spec(path, wmin=330, wmax=1050, step=1440, space=np.linspace, truncation = False):
     calibrated_df, sampling = gaiaxpy.calibrate(path,
                                                 sampling=space(
                                                     wmin, wmax, step),
-                                                save_file=False)
+                                                save_file=False, truncation = truncation)
     return spec(sampling * u.nm,
                 calibrated_df['flux'][0] * u.W / u.m**2 / u.nm,
                 calibrated_df['flux_error'][0] * u.W / u.m**2 / u.nm,
