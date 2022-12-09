@@ -104,20 +104,31 @@ def generateFibresData(data):
     return fits.BinTableHDU().from_columns(outCols, name="fibres")
 
 
-def writeAll(specList, outpath, outfile):
+def writeAll(specList, outpath, outfile, wmin = 3500 *u.AA, wmax = 10000  *u.AA):
     waveList = []
     fluxList = []
     errList  = []
     nameList = []
-
+    
+    # Cut wavelength in a more reasonable range
     for s in specList:
+        inds = np.where((s.wave.to(u.AA).reshape(1, -1)[0] > wmin) & (s.wave.to(u.AA).reshape(1, -1)[0] < wmax))
+        
         nameList.append(str(s.qid) if s.qid is not None else '')
-        waveList.append(list(s.wave.value.reshape(1, -1)[0] * 10))
-        fluxList.append(list(s.flux.value.reshape(1, -1)[0]))
-        errList.append(list(s.err.value.reshape(1, -1)[0]))
+        waveList.append(list(s.wave.to(u.AA).value.reshape(1, -1)[0][inds]))
+        fluxList.append(list(s.flux.value.reshape(1, -1)[0][inds]))
+        errList.append(list(s.err.value.reshape(1, -1)[0][inds]))
 
     specDBData = getObservationData(nameList)
     fibreHDU = generateFibresData(specDBData)
+
+    # fix the path for the outfile if I forget a "/" or the extension
+    if not outfile.endswith(".fits"):
+        outfile = outfile + ".fits"
+
+    if not outpath.endswith("/"):
+        outpath = outpath + "/"
+
     writeFits(fluxList, errList, waveList, fibre = fibreHDU, name = outpath + outfile)
 
 
@@ -135,7 +146,6 @@ def cU(data, u_to, eq=None):
 
 
 class spec:
-
     @u.quantity_input
     def __init__(self,
                  wave: u.nm,
@@ -317,7 +327,7 @@ def plot_all(spec_list, out_folder=None):
 
 
 def check_unique(spec_list, metadata):
-    """Checks if more than one spectrum are associated with a single source."""
+    """Checks if more than one spectrum is associated with a single source."""
     unique = []
     non_unique = []
     non_unique_qid = []
