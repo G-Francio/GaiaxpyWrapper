@@ -114,7 +114,7 @@ def writeAll(specList, outpath, outfile, wmin = 3500 *u.AA, wmax = 10000  *u.AA)
     for s in specList:
         inds = np.where((s.wave.to(u.AA).reshape(1, -1)[0] > wmin) & (s.wave.to(u.AA).reshape(1, -1)[0] < wmax))
         
-        nameList.append(str(s.qid) if s.qid is not None else '')
+        nameList.append(str(s.gid) if s.gid is not None else '')
         waveList.append(list(s.wave.to(u.AA).value.reshape(1, -1)[0][inds]))
         fluxList.append(list(s.flux.value.reshape(1, -1)[0][inds]))
         errList.append(list(s.err.value.reshape(1, -1)[0][inds]))
@@ -282,8 +282,10 @@ class spec:
                   name=outpath + '/' + outfile)
 
 
-def load_spectra(path, wmin=330, wmax=1050, step=1440, space=np.linspace):
+def load_spectra(path, wmin=330, wmax=1050, step=1440, space=np.linspace, truncation = False):
     spec_list = []
+    # TODO: fix this so that it loads the entire file all at once, and I don't need to iterate
+    #  over everything. Seems to take order of magnitues less time!
     for _file in tqdm(os.listdir(path)):
         if _file.endswith(".fits"):
             spec_list.append(
@@ -291,7 +293,8 @@ def load_spectra(path, wmin=330, wmax=1050, step=1440, space=np.linspace):
                                  wmin=wmin,
                                  wmax=wmax,
                                  step=step,
-                                 space=space))
+                                 space=space,
+                                 truncation = truncation))
     return spec_list
 
 
@@ -372,6 +375,7 @@ def get_spec_from_archive(ra=None,
             ra, dec, radius / 3600)
     else:
         print("Please enter either RA/DEC or source_id!")
+        return 0
 
     calibrated_df, sampling = gaiaxpy.calibrate(query,
                                                 sampling=space(
